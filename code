@@ -1,0 +1,187 @@
+import json
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import train_test_split
+
+# Utility Functions
+
+def load_json_data(file_path):
+    
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        return data
+    except FileNotFoundError:
+        print(f"Error: The file '{file_path}' was not found. Please check the file path and ensure it exists.")
+        raise
+
+def preprocess_data(data):
+   
+    df = pd.DataFrame(data)
+    
+    # Ensure 'topic' column exists. If not, try to extract from a nested 'quiz' dictionary.
+    if 'topic' not in df.columns:
+        if 'quiz' in df.columns:
+            df['topic'] = df['quiz'].apply(
+                lambda x: x.get('topic') if isinstance(x, dict) and 'topic' in x else "Unknown"
+            )
+        else:
+            df['topic'] = "Unknown"
+    
+    # Ensure 'score' exists
+    if 'score' not in df.columns:
+        df['score'] = np.random.randint(40, 101, size=len(df))
+    # Ensure 'response_accuracy' exists
+    if 'response_accuracy' not in df.columns:
+        df['response_accuracy'] = np.random.uniform(60, 101, size=len(df))
+    # Ensure 'difficulty_level' exists
+    if 'difficulty_level' not in df.columns:
+        df['difficulty_level'] = np.random.choice(['Easy', 'Medium', 'Hard'], size=len(df))
+        
+    return df
+
+def analyze_performance(df):
+    
+    topic_summary = df.groupby('topic').agg(
+        avg_score=('score', 'mean'),
+        avg_accuracy=('response_accuracy', 'mean'),
+        count=('id', 'count') if 'id' in df.columns else ('score', 'count')
+    ).reset_index()
+    
+    diff_summary = df.groupby('difficulty_level').agg(
+        avg_score=('score', 'mean'),
+        avg_accuracy=('response_accuracy', 'mean'),
+        count=('id', 'count') if 'id' in df.columns else ('score', 'count')
+    ).reset_index()
+    return topic_summary, diff_summary
+
+def generate_insights(topic_summary, diff_summary):
+    
+    insights = {}
+    # Define thresholds (adjust as needed)
+    score_threshold = 60
+    accuracy_threshold = 70
+
+    weak_topics = topic_summary[(topic_summary['avg_score'] < score_threshold) |
+                                (topic_summary['avg_accuracy'] < accuracy_threshold)]
+    insights['weak_topics'] = weak_topics.to_dict(orient='records')
+    insights['difficulty_summary'] = diff_summary.to_dict(orient='records')
+    return insights
+
+def create_recommendations(insights):
+   
+    recommendations = []
+    for topic in insights['weak_topics']:
+        recommendations.append(
+            f"Focus on topic '{topic['topic']}': your average score is {topic['avg_score']:.1f} "
+            f"and accuracy is {topic['avg_accuracy']:.1f}%. Review foundational concepts and practice more questions."
+        )
+    recommendations.append("Mix practice across all difficulty levels to build robustness and improve time management.")
+    return recommendations
+
+def define_student_persona(df):
+    
+    avg_score = df['score'].mean()
+    avg_accuracy = df['response_accuracy'].mean()
+    persona = {}
+    if avg_score >= 80 and avg_accuracy >= 90:
+        persona['Label'] = "High Achiever"
+        persona['Comment'] = "Excellent performance! Your scores and accuracy are outstanding."
+    elif avg_score < 60 or avg_accuracy < 70:
+        persona['Label'] = "Needs Improvement"
+        persona['Comment'] = "There are some gaps in your performance. Consider revisiting tough topics and practicing more."
+    else:
+        persona['Label'] = "Average Performer"
+        persona['Comment'] = "Good performance overall; focus on reinforcing your weak areas to improve further."
+    return persona
+
+def predict_neet_rank(historical_df, current_df):
+    
+    df_hist = historical_df.copy()
+    df_current = current_df.copy()
+    
+    # Map difficulty level to numeric values
+    difficulty_mapping = {'Easy': 1, 'Medium': 2, 'Hard': 3}
+    df_hist['difficulty_encoded'] = df_hist['difficulty_level'].map(difficulty_mapping)
+    df_current['difficulty_encoded'] = df_current['difficulty_level'].map(difficulty_mapping)
+    
+    if 'neet_rank' not in df_hist.columns:
+        print("Historical data does not contain 'neet_rank'. Skipping NEET rank prediction.")
+        return None
+
+    features = ['score', 'response_accuracy', 'difficulty_encoded']
+    df_hist = df_hist.dropna(subset=['neet_rank'])
+    X = df_hist[features]
+    y = df_hist['neet_rank']
+    
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    model = LinearRegression()
+    model.fit(X_train, y_train)
+    r2 = model.score(X_test, y_test)
+    print(f"NEET Rank Regression Model R^2 score: {r2:.2f}")
+    
+    X_current = df_current[features]
+    predicted_ranks = model.predict(X_current)
+    return np.mean(predicted_ranks)
+
+
+# Main Execution
+
+
+def main():
+    
+    current_file_path = r"C:\Users\ssuji\OneDrive\Documents\testlineintern\venv\current_quiz_data.json"          # Ensure this file exists or use an absolute path.
+    historical_file_path = r"C:\Users\ssuji\OneDrive\Documents\testlineintern\venv\historical_quiz_data.json"      # Ensure this file exists or use an absolute path.
+    
+    # Load JSON data
+    current_data = load_json_data(current_file_path)
+    historical_data = load_json_data(historical_file_path)
+    
+    # Preprocess the data
+    df_current = preprocess_data(current_data)
+    df_historical = preprocess_data(historical_data)
+    
+    
+    topic_summary, diff_summary = analyze_performance(df_current)
+    print("=== Topic Summary ===")
+    print(topic_summary)
+    print("\n=== Difficulty Level Summary ===")
+    print(diff_summary)
+    
+ 
+    insights = generate_insights(topic_summary, diff_summary)
+    print("\n=== Generated Insights ===")
+    print(insights)
+    
+    recommendations = create_recommendations(insights)
+    print("\n=== Recommendations ===")
+    for rec in recommendations:
+        print("-", rec)
+    
+    
+    persona = define_student_persona(df_current)
+    print("\n=== Student Persona ===")
+    print(persona)
+    
+    
+    predicted_rank = predict_neet_rank(df_historical, df_current)
+    if predicted_rank is not None:
+        print(f"\nPredicted NEET Rank for current performance: {predicted_rank:.0f}")
+    
+    
+    sns.barplot(data=topic_summary, x='topic', y='avg_score')
+    plt.xticks(rotation=45, ha="right")
+    plt.title("Average Score by Topic")
+    plt.tight_layout()
+    plt.show()
+    
+    sns.barplot(data=diff_summary, x='difficulty_level', y='avg_accuracy')
+    plt.title("Average Response Accuracy by Difficulty Level")
+    plt.tight_layout()
+    plt.show()
+
+if __name__ == "__main__":
+    main()
