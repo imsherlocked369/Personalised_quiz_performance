@@ -47,6 +47,7 @@ This project analyzes a student’s quiz performance data and provides personali
 - NEET Rank Prediction:  
   Using scikit-learn’s LinearRegression, a very basic model is trained on historical performance (using features such as final_score, accuracy, speed, etc.) to predict the rank. (In practice, more training data and feature engineering would be required.)
 
-.
+.![image](https://github.com/user-attachments/assets/289ffc56-139f-4e9f-a4dc-a6d44ede7d86)
+
 
 
